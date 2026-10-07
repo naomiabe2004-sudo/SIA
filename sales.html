@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TechKeep | Sales</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: Arial, Helvetica, sans-serif; background: #f3f3f0; color: #111; }
+  header { background: #fff; border-bottom: 1px solid #ddd; padding: 18px 32px; display: flex; justify-content: space-between; align-items: center; }
+  header h1 { font-size: 24px; font-weight: 800; letter-spacing: -1px; }
+  header div { display: flex; gap: 16px; align-items: center; font-size: 13px; }
+  a, .link { color: #111; font-weight: 700; text-decoration: underline; cursor: pointer; background: none; border: 0; font-size: 13px; }
+  main { max-width: 1000px; margin: 32px auto; padding: 0 20px; }
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px; }
+  .stat { background: #fff; border: 1px solid #ddd; padding: 20px; }
+  .stat small { font-size: 12px; font-weight: 700; color: #555; }
+  .stat strong { display: block; font-size: 28px; font-weight: 800; margin-top: 8px; letter-spacing: -1px; }
+  section { background: #fff; border: 1px solid #ddd; padding: 24px; }
+  h2 { font-size: 18px; font-weight: 800; margin-bottom: 16px; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 10px 6px; border-bottom: 1px solid #eee; vertical-align: top; }
+  th { font-size: 12px; }
+  .num { text-align: right; white-space: nowrap; }
+  .wrap { overflow-x: auto; }
+  .empty { color: #666; padding: 10px 0; font-size: 14px; }
+  .badge { display: inline-block; font-size: 11px; font-weight: 700; padding: 3px 8px; background: #eee; }
+  #msg { margin-bottom: 16px; font-size: 13px; min-height: 18px; color: #b00020; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>TechKeep Sales</h1>
+  <div>
+    <span id="who"></span>
+    <a href="seller.html">My products</a>
+    <button class="link" id="logout">Log out</button>
+  </div>
+</header>
+
+<main>
+  <p id="msg"></p>
+
+  <div class="stats">
+    <div class="stat"><small>Total sales</small><strong id="stTotal">₱0</strong></div>
+    <div class="stat"><small>Items sold</small><strong id="stItems">0</strong></div>
+    <div class="stat"><small>Orders</small><strong id="stOrders">0</strong></div>
+  </div>
+
+  <section>
+    <h2>Orders</h2>
+    <div class="wrap">
+      <table>
+        <thead>
+          <tr><th>Date</th><th>Buyer</th><th>Items</th><th>Status</th><th class="num">Amount</th></tr>
+        </thead>
+        <tbody id="list"></tbody>
+      </table>
+    </div>
+    <p class="empty" id="empty" hidden>No sales yet.</p>
+  </section>
+</main>
+
+<script>
+  // ===== SETTINGS =====
+  const API_URL = "http://localhost:5000";
+  const TOKEN_KEY = "token";
+  const USER_KEY = "user";
+  // ====================
+
+  const token = localStorage.getItem(TOKEN_KEY);
+  let user = null;
+  try { user = JSON.parse(localStorage.getItem(USER_KEY)); } catch (e) {}
+
+  if (!token || !user || user.role !== "seller") {
+    window.location.href = "login.html";
+  }
+
+  const $ = (id) => document.getElementById(id);
+  const peso = (n) => "₱" + Number(n).toLocaleString();
+
+  $("who").textContent = user ? user.name : "";
+  $("logout").onclick = () => {
+    localStorage.removeItem(TOKEN_KEY);
+    localStorage.removeItem(USER_KEY);
+    window.location.href = "login.html";
+  };
+
+  async function load() {
+    try {
+      const res = await fetch(API_URL + "/api/orders/sales", {
+        headers: { Authorization: "Bearer " + token },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.status === 401) { $("logout").click(); return; }
+      if (!res.ok) throw new Error(data.message || "Something went wrong.");
+
+      $("stTotal").textContent = peso(data.totalSales);
+      $("stItems").textContent = data.itemsSold;
+      $("stOrders").textContent = data.orderCount;
+      $("empty").hidden = data.orders.length > 0;
+
+      const body = $("list");
+      body.innerHTML = "";
+      data.orders.forEach((o) => {
+        const tr = document.createElement("tr");
+
+        const date = document.createElement("td");
+        date.textContent = new Date(o.createdAt).toLocaleString();
+        tr.appendChild(date);
+
+        const buyer = document.createElement("td");
+        buyer.textContent = o.buyer ? o.buyer.name : "Unknown";
+        tr.appendChild(buyer);
+
+        const items = document.createElement("td");
+        items.textContent = o.items.map((i) => i.name + " x" + i.quantity).join(", ");
+        tr.appendChild(items);
+
+        const status = document.createElement("td");
+        const badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = o.status;
+        status.appendChild(badge);
+        tr.appendChild(status);
+
+        const amount = document.createElement("td");
+        amount.className = "num";
+        amount.textContent = peso(o.subtotal);
+        tr.appendChild(amount);
+
+        body.appendChild(tr);
+      });
+    } catch (e) {
+      $("msg").textContent = e.message.includes("fetch")
+        ? "Cannot reach the server. Is it running?"
+        : e.message;
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>
